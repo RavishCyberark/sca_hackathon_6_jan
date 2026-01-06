@@ -14,7 +14,7 @@ class OllamaSettings:
     model: str = "qwen2.5-coder:7b"
     timeout: int = 120  # seconds
     temperature: float = 0.7
-    
+
     def get_model_string(self) -> str:
         """Get the full model string for CrewAI."""
         return f"ollama/{self.model}"

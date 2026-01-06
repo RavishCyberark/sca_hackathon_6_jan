@@ -500,7 +500,7 @@ class TestGeneratorCrew:
                 error_message=pr_url
             )
     
-    def generate_from_file(
+def generate_from_file(
         self,
         input_file: str,
         push_to_github: bool = False,

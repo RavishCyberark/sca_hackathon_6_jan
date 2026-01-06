@@ -40,7 +40,8 @@ test-results/
 playwright-report/
 
 # Output
-output/generated_tests/*
+output/generated_tests/__pycache__/
+output/generated_tests/.gitkeep
 !output/generated_tests/.gitkeep
 
 # OS
