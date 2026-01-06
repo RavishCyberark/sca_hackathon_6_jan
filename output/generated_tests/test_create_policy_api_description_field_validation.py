@@ -173,7 +173,51 @@ class TestCreatePolicyDescriptionValidation:
             assert response_data is not None, "Response should contain policy data"
             print(f"[DEBUG] Policy created successfully: {json.dumps(response_data, indent=2)[:500]}")
 
-            
+    # ==================== NEGATIVE TEST CASE ====================
+    
+    @pytest.mark.negative
+    @pytest.mark.description
+    @pytest.mark.null_validation
+    def test_fail_to_create_policy_when_description_is_null(self):
+        """Verify policy creation fails when description is null.
+        
+        Scenario: Fail to create policy when description is null
+          Given the user obtains OAuth2 token from the token endpoint
+          And the policy payload has description as null
+          When the user sends a POST request to "/policies" with the payload
+          Then the response status code should be 400
+          And the response should contain an error message about invalid description
+          And no policy should be created
+        """
+        # Given - the policy payload has description as null
+        payload = self.get_base_payload()
+        payload["metadata"]["description"] = None  # Set description to null
+        payload["metadata"]["name"] = "ravish-test-null-description"
+        
+        # When - the user sends a POST request to "/policies" with the payload
+        response = self.session.post(
+            f"{self.API_BASE_URL}{self.ENDPOINT}",
+            json=payload,
+            headers=self.headers,
+            verify=False
+        )
+        
+        # Debug output
+        print(f"\n[DEBUG] Response Status: {response.status_code}")
+        print(f"[DEBUG] Response Body: {response.text[:500] if response.text else 'Empty'}")
+        
+        # Then - the response status code should be 400
+        assert response.status_code == 400, \
+            f"Expected 400 for null description, got {response.status_code}: {response.text}"
+        
+        # And - the response should contain an error message about invalid description
+        if response.headers.get('content-type', '').startswith('application/json'):
+            response_data = response.json()
+            error_message = str(response_data).lower()
+            assert any(keyword in error_message for keyword in ['description', 'null', 'required', 'invalid', 'error']), \
+                f"Error message should mention description issue: {response.text}"
+            print(f"[DEBUG] Error response as expected: {json.dumps(response_data, indent=2)[:500]}")
+
 
 # if __name__ == "__main__":
 #     testobj = TestCreatePolicyDescriptionValidation()

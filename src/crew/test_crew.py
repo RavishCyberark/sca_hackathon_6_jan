@@ -499,41 +499,13 @@ class TestGeneratorCrew:
                 success=False,
                 error_message=pr_url
             )
-    
-def generate_from_file(
-        self,
-        input_file: str,
-        push_to_github: bool = False,
-        base_branch: str = "main"
-    ) -> WorkflowResult:
-        """Generate tests from a scenario file.
-        
-        Args:
-            input_file: Path to scenario file
-            push_to_github: Whether to push to GitHub
-            base_branch: Target branch for PR
-            
-        Returns:
-            WorkflowResult
-        """
-        # Read the input file
+
+    def generate_from_file(self, input_file: str, push_to_github: bool = False, base_branch: str = "main") -> WorkflowResult:
+        """Generate tests from a scenario file."""
         scenario_text = self.file_handler.read_file(input_file)
-        
         if scenario_text is None:
-            return WorkflowResult(
-                input_file=input_file,
-                scenarios_count=0,
-                success=False,
-                errors=[f"Could not read file: {input_file}"]
-            )
-        
-        # Generate tests
-        result = self.generate_tests(
-            scenario_text=scenario_text,
-            push_to_github=push_to_github,
-            base_branch=base_branch
-        )
-        
+            return WorkflowResult(input_file=input_file, scenarios_count=0, success=False, errors=[f"Could not read file: {input_file}"])
+        result = self.generate_tests(scenario_text=scenario_text, push_to_github=push_to_github, base_branch=base_branch)
         result.input_file = input_file
         return result
 
