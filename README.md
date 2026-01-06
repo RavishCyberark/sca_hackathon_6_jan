@@ -1,18 +1,19 @@
-# AI-Powered Test Case Generator
+# AI-Powered API Test Case Generator
 
-A CrewAI multi-agent system that generates Playwright Python test cases from text scenarios using Ollama with free, open-source LLMs. Optionally pushes generated tests to GitHub and creates Pull Requests.
+A CrewAI multi-agent system that generates **API automation test cases** (pytest + requests) from text scenarios using Ollama with free, open-source LLMs. Optionally pushes generated tests to GitHub and creates Pull Requests.
 
 ## Features
 
 - **Multi-Agent Architecture**: 5 specialized agents working together
-  - Parser Agent: Interprets Gherkin, plain English, or user story formats
-  - Analyzer Agent: Identifies page elements, actions, and assertions
-  - Generator Agent: Creates Playwright Python test code
-  - Reviewer Agent: Validates code quality and best practices
-  - GitHub Agent: Creates branches, commits, and Pull Requests
+  - **Parser Agent**: Interprets Gherkin/BDD, plain English, or user story formats
+  - **Analyzer Agent**: Identifies API endpoints, authentication, and validation requirements
+  - **Generator Agent**: Creates pytest + requests API test code
+  - **Reviewer Agent**: Validates code quality, assertions, and best practices
+  - **GitHub Agent**: Creates branches, commits, and Pull Requests (uses CrewAI task)
 
 - **Zero Cost**: Uses Ollama (local LLM) + GitHub CLI (browser auth)
 - **No API Keys Required**: Everything runs locally or uses browser authentication
+- **API Testing Focus**: OAuth2 authentication, REST API testing, SSL handling
 - **Multiple Input Formats**: Gherkin/BDD, plain English, user stories
 
 ## Prerequisites
@@ -56,68 +57,148 @@ source .venv/bin/activate
 
 ## Usage
 
-### Generate Tests Only
+### Quick Start Commands
 
 ```bash
-python -m src.main --input input/sample_scenarios.txt --output output/generated_tests/
+# Activate virtual environment first
+source .venv/bin/activate
 ```
 
-### Generate Tests and Create Pull Request
+---
+
+### Option 1: Generate Tests Only (No GitHub)
+
+Generate API test cases from scenario file without pushing to GitHub:
 
 ```bash
-python -m src.main --input input/sample_scenarios.txt --push-pr
+python -m src.main --input input/api_scenario_create_policy.txt --output output/generated_tests/
 ```
 
-### Specify Base Branch for PR
+**What this does:**
+- ✅ Runs Parser Agent → Analyzer Agent → Generator Agent → Reviewer Agent
+- ✅ Generates pytest API test code
+- ✅ Saves to `output/generated_tests/`
+- ❌ Does NOT push to GitHub
+
+---
+
+### Option 2: Generate Tests AND Create Pull Request
+
+Generate tests and automatically push to GitHub with a new branch and PR:
 
 ```bash
-python -m src.main --input input/sample_scenarios.txt --push-pr --base-branch develop
+python -m src.main --input input/api_scenario_create_policy.txt --push-pr
 ```
 
-### Use Different Ollama Model
+**What this does:**
+- ✅ Runs Parser Agent → Analyzer Agent → Generator Agent → Reviewer Agent
+- ✅ Generates pytest API test code
+- ✅ Saves to `output/generated_tests/`
+- ✅ Runs **GitHub Agent** (CrewAI task)
+- ✅ Creates new branch (e.g., `test/auto-generated-<feature>`)
+- ✅ Commits and pushes changes
+- ✅ Creates Pull Request
+
+---
+
+### Option 3: Specify Base Branch for PR
+
+Target a different branch (e.g., `develop`) for the Pull Request:
 
 ```bash
-python -m src.main --input input/sample_scenarios.txt --model llama3.1:8b
+python -m src.main --input input/api_scenario_create_policy.txt --push-pr --base-branch develop
+```
+
+---
+
+### Option 4: Use Different Ollama Model
+
+```bash
+python -m src.main --input input/api_scenario_create_policy.txt --model llama3.1:8b
+```
+
+---
+
+### Command Line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--input`, `-i` | Input scenario file path | **Required** |
+| `--output`, `-o` | Output directory for tests | `output/generated_tests/` |
+| `--push-pr` | Push to GitHub and create PR | `False` |
+| `--base-branch` | Target branch for PR | `main` |
+| `--model` | Ollama model name | `qwen2.5-coder:7b` |
+| `--verbose`, `-v` | Verbose output | `False` |
+
+---
+
+### Running Generated Tests
+
+After tests are generated, run them with pytest:
+
+```bash
+# Run all generated tests
+pytest output/generated_tests/ -v
+
+# Run with detailed output
+pytest output/generated_tests/ -v -s
+
+# Run specific test file
+pytest output/generated_tests/test_create_policy_api_description_field_validation.py -v -s
 ```
 
 ## Input Formats
 
-The system accepts multiple input formats:
+The system accepts multiple input formats for API testing:
 
-### Gherkin/BDD
+### Gherkin/BDD (Recommended for API)
 
 ```gherkin
-Feature: User Login
-  Scenario: Successful login
-    Given the user is on the login page
-    When the user enters username "test@example.com"
-    And the user enters password "password123"
-    And the user clicks the login button
-    Then the user should see the dashboard
+Feature: Create Policy API Description Field Validation
+
+Scenario: Successfully create policy with valid description (string, under 200 chars)
+  Given the user obtains OAuth2 token from the token endpoint
+  And the policy payload has description "Valid test policy description"
+  When the user sends a POST request to "/policies" with valid payload
+  Then the response status code should be 200 or 201
+  And the response should contain the created policy details
+
+Scenario: Policy creation fails with null description
+  Given the user obtains OAuth2 token from the token endpoint
+  And the policy payload has description set to null
+  When the user sends a POST request to "/policies" with the payload
+  Then the response status code should indicate a client error (e.g., 400)
+  And the response body should contain an error message related to invalid description
 ```
 
 ### Plain English
 
 ```
-Test that a user can log in successfully:
-1. Go to the login page
-2. Enter email "test@example.com"
-3. Enter password "password123"
-4. Click the login button
-5. Verify the dashboard is displayed
+Test Create Policy API:
+1. Get OAuth2 token from authentication endpoint
+2. Send POST request to /policies with valid payload
+3. Verify response status is 200 or 201
+4. Verify response contains policy data
+
+Negative Test:
+1. Get OAuth2 token
+2. Send POST request with null description
+3. Verify response status is 400
+4. Verify error message in response
 ```
 
 ### User Story
 
 ```
-As a registered user
-I want to log into my account
-So that I can access my dashboard
+As an API consumer
+I want to create policies via REST API
+So that I can automate policy management
 
 Acceptance Criteria:
-- User can enter email and password
-- Valid credentials redirect to dashboard
-- Welcome message displays user's name
+- API requires OAuth2 Bearer token
+- Description field must be a string
+- Description field max length is 200 characters
+- Invalid description returns 400 error
 ```
 
 ## Project Structure

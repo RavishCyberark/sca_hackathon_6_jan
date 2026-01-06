@@ -142,12 +142,12 @@ class TestGeneratorCrew:
                 if self.verbose:
                     print(f"✅ Saved {len(saved_files)} file(s)")
                 
-                # Step 4: Push to GitHub if requested
+                # Step 4: Push to GitHub if requested - use GitHub Agent
                 if push_to_github:
                     if self.verbose:
-                        print("\n🐙 Pushing to GitHub...")
+                        print("\n🐙 Running GitHub Agent for branch creation and PR...")
                     
-                    pr_metadata = self._push_to_github(
+                    pr_metadata = self._run_github_agent(
                         files=saved_files,
                         feature_name=self._extract_feature_name(scenario_text),
                         base_branch=base_branch
@@ -499,6 +499,87 @@ class TestGeneratorCrew:
                 success=False,
                 error_message=pr_url
             )
+
+    def _run_github_agent(
+        self,
+        files: list[str],
+        feature_name: str,
+        base_branch: str
+    ) -> PRMetadata:
+        """Run the GitHub Agent to push code and create PR using CrewAI.
+        
+        Args:
+            files: List of file paths to commit
+            feature_name: Feature name for the PR
+            base_branch: Target branch for the PR
+            
+        Returns:
+            PRMetadata with result
+        """
+        if self.verbose:
+            print("  🤖 GitHub Agent: Starting Git operations...")
+        
+        # Create the GitHub task for the agent
+        github_task = create_github_task(
+            agent=self.github_agent,
+            files=files,
+            feature_name=feature_name,
+            base_branch=base_branch
+        )
+        
+        # Create a mini crew with just the GitHub agent
+        github_crew = Crew(
+            agents=[self.github_agent],
+            tasks=[github_task],
+            process=Process.sequential,
+            verbose=self.verbose,
+        )
+        
+        try:
+            # Run the GitHub agent
+            crew_result = github_crew.kickoff()
+            
+            if self.verbose:
+                print(f"  📝 GitHub Agent Result: {str(crew_result)[:200]}")
+            
+            # Parse the result to extract PR information
+            result_str = str(crew_result)
+            
+            # Try to extract PR URL from result
+            pr_url_match = re.search(r'https://github\.com/[^\s]+/pull/\d+', result_str)
+            pr_url = pr_url_match.group(0) if pr_url_match else None
+            
+            # Extract branch name
+            branch_match = re.search(r'test/auto-generated[^\s]*', result_str)
+            branch_name = branch_match.group(0) if branch_match else f"test/auto-generated-{feature_name}"
+            
+            if pr_url:
+                pr_number = None
+                pr_num_match = re.search(r'/pull/(\d+)', pr_url)
+                if pr_num_match:
+                    pr_number = int(pr_num_match.group(1))
+                
+                return PRMetadata(
+                    branch_name=branch_name,
+                    title=f"Add tests for {feature_name}",
+                    body=generate_pr_body(feature_name, 1, files),
+                    base_branch=base_branch,
+                    files=files,
+                    pr_url=pr_url,
+                    pr_number=pr_number,
+                    success=True
+                )
+            else:
+                # Fallback to direct method if agent didn't return PR URL
+                if self.verbose:
+                    print("  ⚠️ GitHub Agent didn't return PR URL, falling back to direct method...")
+                return self._push_to_github(files, feature_name, base_branch)
+                
+        except Exception as e:
+            if self.verbose:
+                print(f"  ❌ GitHub Agent error: {e}, falling back to direct method...")
+            # Fallback to the direct method
+            return self._push_to_github(files, feature_name, base_branch)
 
     def generate_from_file(self, input_file: str, push_to_github: bool = False, base_branch: str = "main") -> WorkflowResult:
         """Generate tests from a scenario file."""
