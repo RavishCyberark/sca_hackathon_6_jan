@@ -16,11 +16,7 @@ pytest-html>=4.0.0
 # API Testing
 requests>=2.31.0
 httpx>=0.25.0
-
-# UI Testing (optional) - Playwright Python
-playwright>=1.40.0
-pytest-playwright>=0.5.0
+urllib3>=2.0.0
 
 # Git Operations
 gitpython>=3.1.0
-

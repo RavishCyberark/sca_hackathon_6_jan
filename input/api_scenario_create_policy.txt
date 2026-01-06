@@ -15,11 +15,12 @@ Feature: Create Policy API - Description Field Validation
     Then the response status code should be 200 or 201
     And the response should contain the created policy details
 
-  @negative @description @null_validation
-  Scenario: Fail to create policy when description is null
+
+  @negative @description @length_validation
+  Scenario: Fail to create policy when description exceeds 200 characters
     Given the user obtains OAuth2 token from the token endpoint
-    And the policy payload has description as null
+    And the policy payload has description with more than 200 characters
     When the user sends a POST request to "/policies" with the payload
     Then the response status code should be 400
-    And the response should contain an error message about invalid description
+    And the response should contain an error message about description length
     And no policy should be created

@@ -278,11 +278,27 @@ class TestGeneratorCrew:
         if code_match:
             return code_match.group(1).strip()
         
-        # Check if the result looks like Python code
-        if "import pytest" in result or "def test_" in result:
+        # Check if the result looks like Python code (API tests use requests, not playwright)
+        if "import pytest" in result or "def test_" in result or "import requests" in result:
             # Clean up any markdown artifacts
             code = result.replace("```python", "").replace("```", "")
             code = re.sub(r'```json.*?```', '', code, flags=re.DOTALL)
+            code = re.sub(r'```.*?```', '', code, flags=re.DOTALL)
+            
+            # Remove any leading/trailing explanation text
+            lines = code.split('\n')
+            code_lines = []
+            in_code = False
+            for line in lines:
+                # Start capturing when we see imports or docstrings
+                if line.strip().startswith('"""') or line.strip().startswith("'''") or \
+                   line.strip().startswith('import ') or line.strip().startswith('from '):
+                    in_code = True
+                if in_code:
+                    code_lines.append(line)
+            
+            if code_lines:
+                return '\n'.join(code_lines).strip()
             return code.strip()
         
         return None

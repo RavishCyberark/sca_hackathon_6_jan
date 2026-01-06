@@ -222,8 +222,7 @@ sca_hackathon_6_jan/
 │   ├── models/
 │   │   └── schemas.py            # Data models
 │   ├── templates/
-│   │   ├── playwright_test.j2
-│   │   └── page_object.j2
+│   │   └── api_test.j2          # API test template
 │   └── utils/
 │       ├── file_handler.py
 │       ├── prompt_templates.py

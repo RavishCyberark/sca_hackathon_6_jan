@@ -16,37 +16,37 @@ class StepType(str, Enum):
 
 
 class ActionType(str, Enum):
-    """Types of actions that can be performed."""
+    """Types of API actions that can be performed."""
     
-    NAVIGATE = "navigate"
-    CLICK = "click"
-    FILL = "fill"
-    SELECT = "select"
-    CHECK = "check"
-    UNCHECK = "uncheck"
-    HOVER = "hover"
-    WAIT = "wait"
-    SCROLL = "scroll"
-    PRESS = "press"
-    UPLOAD = "upload"
+    GET_TOKEN = "get_token"
+    SEND_REQUEST = "send_request"
+    VERIFY_STATUS = "verify_status"
+    VERIFY_RESPONSE = "verify_response"
+    MODIFY_PAYLOAD = "modify_payload"
     CUSTOM = "custom"
 
 
-class AssertionType(str, Enum):
-    """Types of assertions."""
+class HTTPMethod(str, Enum):
+    """HTTP methods for API requests."""
     
-    VISIBLE = "visible"
-    HIDDEN = "hidden"
-    TEXT_CONTAINS = "text_contains"
-    TEXT_EQUALS = "text_equals"
-    URL_CONTAINS = "url_contains"
-    URL_EQUALS = "url_equals"
-    ELEMENT_EXISTS = "element_exists"
-    ATTRIBUTE_EQUALS = "attribute_equals"
-    ENABLED = "enabled"
-    DISABLED = "disabled"
-    CHECKED = "checked"
-    UNCHECKED = "unchecked"
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+
+
+class AssertionType(str, Enum):
+    """Types of API response assertions."""
+    
+    STATUS_CODE = "status_code"
+    RESPONSE_CONTAINS = "response_contains"
+    RESPONSE_EQUALS = "response_equals"
+    FIELD_EXISTS = "field_exists"
+    FIELD_VALUE = "field_value"
+    HEADER_EXISTS = "header_exists"
+    HEADER_VALUE = "header_value"
+    RESPONSE_TIME = "response_time"
 
 
 class TestStep(BaseModel):
@@ -55,7 +55,7 @@ class TestStep(BaseModel):
     step_type: StepType = Field(description="Type of step (Given/When/Then/And)")
     description: str = Field(description="Original text description of the step")
     action: Optional[str] = Field(default=None, description="Inferred action to perform")
-    target: Optional[str] = Field(default=None, description="Target element or URL")
+    target: Optional[str] = Field(default=None, description="Target endpoint or field")
     value: Optional[str] = Field(default=None, description="Value to input or verify")
     
     class Config:
@@ -63,9 +63,9 @@ class TestStep(BaseModel):
 
 
 class ParsedScenario(BaseModel):
-    """Represents a parsed test scenario."""
+    """Represents a parsed API test scenario."""
     
-    feature_name: str = Field(description="Name of the feature being tested")
+    feature_name: str = Field(description="Name of the API feature being tested")
     scenario_name: str = Field(description="Name of the specific scenario")
     description: Optional[str] = Field(default=None, description="Optional description")
     steps: list[TestStep] = Field(default_factory=list, description="List of test steps")
@@ -73,7 +73,6 @@ class ParsedScenario(BaseModel):
     
     def to_test_name(self) -> str:
         """Convert scenario name to a valid test method name."""
-        # Convert to snake_case
         name = self.scenario_name.lower()
         name = name.replace(" ", "_")
         name = "".join(c if c.isalnum() or c == "_" else "" for c in name)
@@ -81,120 +80,97 @@ class ParsedScenario(BaseModel):
     
     def to_class_name(self) -> str:
         """Convert feature name to a valid test class name."""
-        # Convert to PascalCase
         words = self.feature_name.split()
         name = "".join(word.capitalize() for word in words)
         name = "".join(c if c.isalnum() else "" for c in name)
         return f"Test{name}"
 
 
-class TestElement(BaseModel):
-    """Represents a UI element identified for testing."""
+class APIEndpoint(BaseModel):
+    """Represents an API endpoint configuration."""
     
-    name: str = Field(description="Descriptive name of the element")
-    selector: str = Field(description="Playwright selector for the element")
-    selector_type: str = Field(
-        default="css",
-        description="Type of selector (css, xpath, text, role, testid)"
-    )
-    description: Optional[str] = Field(
-        default=None,
-        description="What this element is used for"
-    )
+    url: str = Field(description="Full URL of the API endpoint")
+    method: HTTPMethod = Field(default=HTTPMethod.POST, description="HTTP method")
+    headers: dict = Field(default_factory=dict, description="Request headers")
+    
+    class Config:
+        use_enum_values = True
+
+
+class AuthConfig(BaseModel):
+    """Authentication configuration for API tests."""
+    
+    token_url: str = Field(description="OAuth2 token endpoint URL")
+    username: str = Field(description="Username or client ID")
+    password: str = Field(description="Password or client secret")
+    grant_type: str = Field(default="client_credentials", description="OAuth2 grant type")
+    scope: str = Field(default="full", description="OAuth2 scope")
 
 
 class TestAction(BaseModel):
-    """Represents an action to be performed in a test."""
+    """Represents an API action to be performed in a test."""
     
-    action_type: ActionType = Field(description="Type of action")
-    element: Optional[TestElement] = Field(
-        default=None,
-        description="Element to interact with"
-    )
-    value: Optional[str] = Field(default=None, description="Value for the action")
-    wait_after: int = Field(
-        default=0,
-        description="Milliseconds to wait after action"
-    )
+    action_type: ActionType = Field(description="Type of API action")
+    endpoint: Optional[APIEndpoint] = Field(default=None, description="API endpoint")
+    payload: Optional[dict] = Field(default=None, description="Request payload")
+    expected_status: Optional[int] = Field(default=None, description="Expected status code")
     
     class Config:
         use_enum_values = True
 
 
 class TestAssertion(BaseModel):
-    """Represents an assertion to verify."""
+    """Represents an API response assertion."""
     
     assertion_type: AssertionType = Field(description="Type of assertion")
-    element: Optional[TestElement] = Field(
-        default=None,
-        description="Element to assert on"
-    )
-    expected_value: Optional[str] = Field(
-        default=None,
-        description="Expected value for the assertion"
-    )
-    message: Optional[str] = Field(
-        default=None,
-        description="Custom error message if assertion fails"
-    )
+    field_path: Optional[str] = Field(default=None, description="JSON path to field")
+    expected_value: Optional[str] = Field(default=None, description="Expected value")
+    message: Optional[str] = Field(default=None, description="Error message if fails")
     
     class Config:
         use_enum_values = True
 
 
 class TestBlueprint(BaseModel):
-    """Blueprint for generating a test case."""
+    """Blueprint for generating an API test case."""
     
     class_name: str = Field(description="Test class name")
     method_name: str = Field(description="Test method name")
     docstring: str = Field(description="Test method docstring")
+    test_type: str = Field(default="positive", description="positive or negative")
     
-    # Setup
-    base_url: Optional[str] = Field(default=None, description="Base URL for the test")
-    setup_actions: list[TestAction] = Field(
+    # API Configuration
+    base_url: str = Field(description="Base URL for the API")
+    endpoint: str = Field(description="API endpoint path")
+    http_method: HTTPMethod = Field(default=HTTPMethod.POST, description="HTTP method")
+    
+    # Authentication
+    auth_config: Optional[AuthConfig] = Field(default=None, description="Auth config")
+    
+    # Request
+    base_payload: dict = Field(default_factory=dict, description="Base request payload")
+    payload_modifications: list[str] = Field(
         default_factory=list,
-        description="Actions to perform before test"
+        description="Payload modifications for this test"
     )
     
-    # Main test flow
-    actions: list[TestAction] = Field(
-        default_factory=list,
-        description="Main test actions"
-    )
+    # Assertions
+    expected_status: int = Field(default=200, description="Expected status code")
     assertions: list[TestAssertion] = Field(
         default_factory=list,
-        description="Assertions to verify"
+        description="Response assertions"
     )
     
-    # Teardown
-    teardown_actions: list[TestAction] = Field(
-        default_factory=list,
-        description="Cleanup actions"
-    )
-    
-    # Page objects
-    page_elements: list[TestElement] = Field(
-        default_factory=list,
-        description="Elements to include in page object"
-    )
+    class Config:
+        use_enum_values = True
 
 
 class GeneratedTest(BaseModel):
-    """Represents a generated test file."""
+    """Represents a generated API test file."""
     
     filename: str = Field(description="Name of the test file")
     content: str = Field(description="Generated test code")
     test_count: int = Field(default=1, description="Number of tests in the file")
-    
-    # Optional page object
-    page_object_filename: Optional[str] = Field(
-        default=None,
-        description="Name of the page object file"
-    )
-    page_object_content: Optional[str] = Field(
-        default=None,
-        description="Generated page object code"
-    )
     
     # Validation status
     is_valid: bool = Field(default=True, description="Whether the code passed review")
@@ -256,4 +232,3 @@ class WorkflowResult(BaseModel):
         default_factory=list,
         description="Any warnings"
     )
-

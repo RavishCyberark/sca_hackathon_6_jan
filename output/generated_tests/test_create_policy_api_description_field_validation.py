@@ -11,6 +11,10 @@ Authentication Flow:
 import pytest
 import requests
 import json
+import urllib3
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class TestCreatePolicyDescriptionValidation:
@@ -29,12 +33,7 @@ class TestCreatePolicyDescriptionValidation:
     def setup(self):
         """Setup for each test - obtain OAuth2 token."""
         self.session = requests.Session()
-        # Disable SSL verification for self-signed certificates
         self.session.verify = False
-        
-        # Suppress InsecureRequestWarning
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
         # Get OAuth2 token
         self.access_token = self._get_access_token()
@@ -81,7 +80,7 @@ class TestCreatePolicyDescriptionValidation:
         return {
             "metadata": {
                 "policyId": None,
-                "name": "ravish-test-21",
+                "name": "ravish-test-31",
                 "description": "test",
                 "status": {
                     "status": "Active",
@@ -137,7 +136,7 @@ class TestCreatePolicyDescriptionValidation:
     @pytest.mark.positive
     @pytest.mark.description
     @pytest.mark.validation
-    def test_successfully_create_policy_with_valid_description_string_under_200_chars(self):
+    def test_successfully_create_policy_with_valid_description_under_200_chars(self):
         """Verify policy creation succeeds with valid string description under 200 chars.
         
         Scenario: Successfully create policy with valid description (string, under 200 chars)
@@ -150,6 +149,9 @@ class TestCreatePolicyDescriptionValidation:
         # Given - the policy payload has description "Valid test policy description"
         payload = self.get_base_payload()
         payload["metadata"]["description"] = "Valid test policy description"
+        # Use unique policy name for each test run
+        import time
+        payload["metadata"]["name"] = f"ravish-test-valid-{int(time.time())}"
         
         # When - the user sends a POST request to "/policies" with valid payload
         response = self.session.post(
@@ -173,26 +175,29 @@ class TestCreatePolicyDescriptionValidation:
             assert response_data is not None, "Response should contain policy data"
             print(f"[DEBUG] Policy created successfully: {json.dumps(response_data, indent=2)[:500]}")
 
-    # ==================== NEGATIVE TEST CASE ====================
+    # ==================== NEGATIVE TEST CASE - 200 CHAR LIMIT ====================
     
     @pytest.mark.negative
     @pytest.mark.description
-    @pytest.mark.null_validation
-    def test_fail_to_create_policy_when_description_is_null(self):
-        """Verify policy creation fails when description is null.
+    @pytest.mark.length_validation
+    def test_fail_to_create_policy_when_description_exceeds_200_characters(self):
+        """Verify policy creation fails when description exceeds 200 characters.
         
-        Scenario: Fail to create policy when description is null
+        Scenario: Fail to create policy when description exceeds 200 characters
           Given the user obtains OAuth2 token from the token endpoint
-          And the policy payload has description as null
+          And the policy payload has description with more than 200 characters
           When the user sends a POST request to "/policies" with the payload
           Then the response status code should be 400
-          And the response should contain an error message about invalid description
+          And the response should contain an error message about description length
           And no policy should be created
         """
-        # Given - the policy payload has description as null
+        # Given - the policy payload has description with more than 200 characters
         payload = self.get_base_payload()
-        payload["metadata"]["description"] = None  # Set description to null
-        payload["metadata"]["name"] = "ravish-test-null-description"
+        # Generate a description with 201 characters (exceeds 200 limit)
+        long_description = "A" * 201
+        payload["metadata"]["description"] = long_description
+        import time
+        payload["metadata"]["name"] = f"ravish-test-long-desc-{int(time.time())}"
         
         # When - the user sends a POST request to "/policies" with the payload
         response = self.session.post(
@@ -203,31 +208,18 @@ class TestCreatePolicyDescriptionValidation:
         )
         
         # Debug output
-        print(f"\n[DEBUG] Response Status: {response.status_code}")
+        print(f"\n[DEBUG] Description length: {len(long_description)} characters")
+        print(f"[DEBUG] Response Status: {response.status_code}")
         print(f"[DEBUG] Response Body: {response.text[:500] if response.text else 'Empty'}")
         
         # Then - the response status code should be 400
         assert response.status_code == 400, \
-            f"Expected 400 for null description, got {response.status_code}: {response.text}"
+            f"Expected 400 for description exceeding 200 chars, got {response.status_code}: {response.text}"
         
-        # And - the response should contain an error message about invalid description
+        # And - the response should contain an error message about description length
         if response.headers.get('content-type', '').startswith('application/json'):
             response_data = response.json()
             error_message = str(response_data).lower()
-            assert any(keyword in error_message for keyword in ['description', 'null', 'required', 'invalid', 'error']), \
-                f"Error message should mention description issue: {response.text}"
+            assert any(keyword in error_message for keyword in ['description', 'length', 'character', 'max', 'limit', 'long', 'exceed', 'invalid', 'error']), \
+                f"Error message should mention description length issue: {response.text}"
             print(f"[DEBUG] Error response as expected: {json.dumps(response_data, indent=2)[:500]}")
-
-
-# if __name__ == "__main__":
-#     testobj = TestCreatePolicyDescriptionValidation()
-#     # Initialize session manually (normally done by pytest fixture)
-#     testobj.session = requests.Session()
-    
-#     # Get token
-#     token = testobj._get_access_token()
-#     print(f"Access token: {token}")
-    
-#     # Clean up
-#     testobj.session.close()
-

@@ -1,15 +1,13 @@
-"""Task definitions for the test generation workflow."""
+"""Task definitions for the API test generation workflow."""
 
 from crewai import Task, Agent
-
-from src.utils.prompt_templates import PromptTemplates
 
 
 def create_parse_task(
     agent: Agent,
     scenario_text: str
 ) -> Task:
-    """Create a task for parsing test scenarios.
+    """Create a task for parsing API test scenarios.
     
     Args:
         agent: The Parser Agent
@@ -20,7 +18,7 @@ def create_parse_task(
     """
     return Task(
         description=f"""
-Parse the following test scenario and extract structured information.
+Parse the following API test scenario and extract structured information.
 
 ## Scenario
 {scenario_text}
@@ -28,31 +26,43 @@ Parse the following test scenario and extract structured information.
 ## Your Task
 1. Identify the input format (Gherkin, plain English, or user story)
 2. Extract the feature name and scenario name
-3. Break down into individual test steps
-4. For each step, identify:
+3. Identify the API endpoint URL and HTTP method
+4. Extract authentication details (token URL, credentials)
+5. Break down into individual test steps
+6. For each step, identify:
    - Step type (Given/When/Then/And)
    - Description of the step
-   - Action to perform (navigate, click, fill, etc.)
-   - Target element or URL
-   - Value to input or verify
+   - Action to perform (get_token, send_request, verify_status, etc.)
+   - HTTP method, endpoint, payload details
+   - Expected values for assertions
 
 ## Output
 Provide a structured JSON response with:
-- feature_name: Name of the feature being tested
+- feature_name: Name of the API feature being tested
 - scenario_name: Name of the specific scenario
-- steps: Array of step objects with step_type, description, action, target, value
+- api_endpoint: Full URL of the API endpoint
+- http_method: GET, POST, PUT, DELETE, etc.
+- authentication: Token URL, credentials, grant type
+- steps: Array of step objects
 """,
         expected_output="""A JSON object containing:
 {
   "feature_name": "string",
-  "scenario_name": "string", 
+  "scenario_name": "string",
+  "api_endpoint": "string",
+  "http_method": "POST|GET|PUT|DELETE",
+  "authentication": {
+    "token_url": "string",
+    "username": "string",
+    "password": "string",
+    "grant_type": "client_credentials"
+  },
   "steps": [
     {
       "step_type": "given|when|then|and",
       "description": "step description",
-      "action": "navigate|click|fill|verify|etc",
-      "target": "element or URL",
-      "value": "optional value"
+      "action": "get_token|send_request|verify_status|verify_response",
+      "details": {}
     }
   ]
 }""",
@@ -64,7 +74,7 @@ def create_analyze_task(
     agent: Agent,
     context: list[Task]
 ) -> Task:
-    """Create a task for analyzing parsed scenarios.
+    """Create a task for analyzing parsed API scenarios.
     
     Args:
         agent: The Analyzer Agent
@@ -75,62 +85,50 @@ def create_analyze_task(
     """
     return Task(
         description="""
-Analyze the parsed test scenario and create a detailed test blueprint.
+Analyze the parsed API test scenario and create a detailed test blueprint.
 
 ## Your Task
 Using the parsed scenario from the previous step:
 
-1. Convert each step into specific Playwright actions
-2. Determine appropriate selectors for UI elements
-3. Map test steps to Playwright assertions
-4. Identify page elements for potential page objects
+1. Identify authentication flow (OAuth2, API key, etc.)
+2. Map test steps to requests library actions
+3. Determine expected status codes and response validations
+4. Identify test data requirements and payload structure
 
-## Selector Strategy (in order of preference)
-1. data-testid: `[data-testid="element-name"]`
-2. Role-based: `role=button[name="Submit"]`
-3. Text-based: `text=Login`
-4. CSS: `.class-name` or `#element-id`
-
-## Action Mapping
-- "navigate" → page.goto()
-- "click" → page.click()
-- "fill"/"enter"/"type" → page.fill()
-- "select" → page.select_option()
-- "verify visible" → expect(locator).to_be_visible()
-- "verify text" → expect(locator).to_contain_text()
-- "verify URL" → expect(page).to_have_url()
+## API Action Mapping
+- "get_token" → session.post() to token endpoint with credentials
+- "send_request" → session.post/get/put/delete() to API endpoint
+- "verify_status" → assert response.status_code == expected
+- "verify_response" → assert on response.json() fields
 
 ## Output
 Provide a test blueprint with:
 - class_name: PascalCase test class name
-- method_name: snake_case test method name
-- docstring: Description of what the test verifies
-- actions: List of Playwright actions with element selectors
-- assertions: List of assertions with expected values
-- page_elements: Elements to include in page object
+- test_methods: List of test methods to generate
+- authentication: OAuth2 token configuration
+- base_payload: Template payload for the API
+- assertions: Expected status codes and response validations
 """,
         expected_output="""A JSON test blueprint containing:
 {
-  "class_name": "TestFeatureName",
-  "method_name": "test_scenario_name",
-  "docstring": "Verify that...",
-  "actions": [
+  "class_name": "TestAPIFeatureName",
+  "test_methods": [
     {
-      "action_type": "navigate|click|fill",
-      "element": {"name": "...", "selector": "..."},
-      "value": "optional"
+      "method_name": "test_scenario_name",
+      "test_type": "positive|negative",
+      "docstring": "Verify that...",
+      "payload_modifications": {},
+      "expected_status": 200|201|400|404,
+      "assertions": []
     }
   ],
-  "assertions": [
-    {
-      "assertion_type": "visible|text_contains|url_equals",
-      "element": {"selector": "..."},
-      "expected_value": "..."
-    }
-  ],
-  "page_elements": [
-    {"name": "...", "selector": "...", "description": "..."}
-  ]
+  "authentication": {
+    "token_url": "...",
+    "username": "...",
+    "password": "...",
+    "grant_type": "client_credentials"
+  },
+  "base_payload": {}
 }""",
         agent=agent,
         context=context,
@@ -141,7 +139,7 @@ def create_generate_task(
     agent: Agent,
     context: list[Task]
 ) -> Task:
-    """Create a task for generating Playwright test code.
+    """Create a task for generating pytest API test code.
     
     Args:
         agent: The Generator Agent
@@ -152,59 +150,140 @@ def create_generate_task(
     """
     return Task(
         description="""
-Generate a complete Playwright Python test file from the test blueprint.
+Generate a complete pytest API test file from the test blueprint.
 
 ## Your Task
 Using the test blueprint from the previous step, generate:
 
-1. A complete, runnable Python test file
-2. All necessary imports (pytest, playwright)
-3. A test class with proper naming
-4. Test method(s) with docstrings
+1. A complete, runnable Python test file using pytest and requests
+2. All necessary imports (pytest, requests, json, urllib3)
+3. A test class with proper OAuth2 authentication fixture
+4. Test method(s) for each scenario with docstrings
 5. Given/When/Then comments to organize the code
-6. Proper use of Playwright's expect() API
+6. Proper assertions on status codes and response data
 
-## Code Structure
+## Code Structure - USE THIS EXACT TEMPLATE:
 ```python
-\"\"\"Test module for [Feature Name].\"\"\"
+\"\"\"API Test module for [Feature Name].
+
+Auto-generated by AI Test Case Generator.
+API Endpoint: [METHOD] [URL]
+\"\"\"
 
 import pytest
-from playwright.sync_api import Page, expect
+import requests
+import json
+import urllib3
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class TestClassName:
-    \"\"\"Test cases for [Feature Name].\"\"\"
+    \"\"\"API Test cases for [Feature Name].\"\"\"
     
-    def test_method_name(self, page: Page):
-        \"\"\"[Docstring describing what this test verifies]\"\"\"
-        # Given - Setup/Preconditions
-        page.goto("/path")
+    # Token API Configuration
+    TOKEN_URL = "[token_url]"
+    TOKEN_USERNAME = "[username]"
+    TOKEN_PASSWORD = "[password]"
+    
+    # API Configuration
+    API_BASE_URL = "[base_url]"
+    ENDPOINT = "[endpoint]"
+    
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        \"\"\"Setup for each test - obtain OAuth2 token.\"\"\"
+        self.session = requests.Session()
+        self.session.verify = False
         
-        # When - Actions
-        page.fill("[data-testid='input']", "value")
-        page.click("[data-testid='button']")
+        # Get OAuth2 token
+        self.access_token = self._get_access_token()
         
-        # Then - Assertions
-        expect(page).to_have_url("/expected")
-        expect(page.locator(".message")).to_contain_text("Success")
+        # Set headers with Bearer token
+        self.headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {{self.access_token}}"
+        }
+        
+        yield
+        self.session.close()
+    
+    def _get_access_token(self) -> str:
+        \"\"\"Obtain OAuth2 access token.\"\"\"
+        token_payload = {
+            "grant_type": "client_credentials",
+            "scope": "full"
+        }
+        
+        response = self.session.post(
+            self.TOKEN_URL,
+            data=token_payload,
+            auth=(self.TOKEN_USERNAME, self.TOKEN_PASSWORD),
+            headers={{"Content-Type": "application/x-www-form-urlencoded"}},
+            verify=False
+        )
+        
+        if response.status_code != 200:
+            pytest.fail(f"Failed to get token: {{response.status_code}} - {{response.text}}")
+        
+        return response.json().get("access_token")
+    
+    def get_base_payload(self) -> dict:
+        \"\"\"Return the base payload for the API.\"\"\"
+        return {{
+            # Payload from scenario
+        }}
+    
+    @pytest.mark.positive
+    def test_positive_scenario(self):
+        \"\"\"Verify [positive scenario description].\"\"\"
+        payload = self.get_base_payload()
+        
+        response = self.session.post(
+            f"{{self.API_BASE_URL}}{{self.ENDPOINT}}",
+            json=payload,
+            headers=self.headers,
+            verify=False
+        )
+        
+        assert response.status_code in [200, 201], f"Expected 200/201, got {{response.status_code}}"
+    
+    @pytest.mark.negative
+    def test_negative_scenario(self):
+        \"\"\"Verify [negative scenario description].\"\"\"
+        payload = self.get_base_payload()
+        payload["field"] = invalid_value  # Modify for negative test
+        
+        response = self.session.post(
+            f"{{self.API_BASE_URL}}{{self.ENDPOINT}}",
+            json=payload,
+            headers=self.headers,
+            verify=False
+        )
+        
+        assert response.status_code == 400, f"Expected 400, got {{response.status_code}}"
 ```
 
-## Requirements
-- Use type hints (page: Page)
-- Use expect() for assertions, not assert
-- Use clear, descriptive variable names
-- Follow PEP 8 style guidelines
-- Make the code ready to run with pytest
+## CRITICAL Requirements
+- Use requests library, NOT playwright
+- Use pytest fixtures for setup
+- Disable SSL verification (verify=False)
+- Suppress urllib3 warnings
+- Include debug print statements
+- Use assert statements (not expect)
+- Extract constants for URLs and credentials
 
 ## Output
-Provide ONLY the complete Python code. No explanations or markdown.
+Provide ONLY the complete Python code. No explanations or markdown wrappers.
 """,
-        expected_output="""Complete Python test code that:
-- Has all necessary imports
-- Contains a properly named test class
+        expected_output="""Complete Python API test code that:
+- Has all necessary imports (pytest, requests, json, urllib3)
+- Contains OAuth2 authentication fixture
 - Has test methods with docstrings
-- Uses Playwright's expect() API
-- Is properly formatted and ready to run""",
+- Uses requests library for API calls
+- Is properly formatted and ready to run with pytest""",
         agent=agent,
         context=context,
     )
@@ -214,7 +293,7 @@ def create_review_task(
     agent: Agent,
     context: list[Task]
 ) -> Task:
-    """Create a task for reviewing generated test code.
+    """Create a task for reviewing generated API test code.
     
     Args:
         agent: The Reviewer Agent
@@ -225,47 +304,42 @@ def create_review_task(
     """
     return Task(
         description="""
-Review the generated Playwright test code for quality and correctness.
+Review the generated API test code for quality and correctness.
 
 ## Your Task
 1. Check that all imports are present and correct
-2. Verify the code is syntactically correct
-3. Ensure Playwright best practices are followed
-4. Check that expect() assertions are used properly
-5. Verify selectors are well-formed
+2. Verify the code is syntactically correct Python
+3. Ensure API testing best practices are followed
+4. Check that assertions are proper
+5. Verify OAuth2 authentication is implemented correctly
 6. Check for proper documentation
 
 ## Review Checklist
 - [ ] `import pytest` present
-- [ ] `from playwright.sync_api import Page, expect` present
+- [ ] `import requests` present
+- [ ] `import json` present
+- [ ] `import urllib3` with warning suppression
 - [ ] Class name starts with "Test"
 - [ ] Method names start with "test_"
-- [ ] `page: Page` type hint on test methods
-- [ ] `expect()` used instead of `assert`
-- [ ] Selectors are valid Playwright selectors
+- [ ] OAuth2 token retrieval implemented
+- [ ] `verify=False` for SSL handling
+- [ ] `assert` statements used (NOT expect)
 - [ ] Docstrings are present and descriptive
 - [ ] Code follows PEP 8
+- [ ] Debug print statements included
 
 ## If Issues Found
 - Fix any syntax errors
 - Add missing imports
-- Correct selector format
-- Add missing type hints
+- Correct authentication flow
+- Add missing SSL handling
 - Improve documentation
 
 ## Output
-Provide a JSON response with:
-- is_valid: Whether the original code passed review
-- review_notes: List of observations
-- improvements_made: List of changes made
-- final_code: The complete, corrected code (or original if no changes needed)
+Return ONLY the final corrected Python code. No JSON wrapper, no markdown, just the code.
 """,
-        expected_output="""{
-  "is_valid": true|false,
-  "review_notes": ["observation 1", "observation 2"],
-  "improvements_made": ["change 1", "change 2"],
-  "final_code": "complete Python test code"
-}""",
+        expected_output="""Complete, reviewed Python API test code ready to run with pytest.
+The code should be the final version with all corrections applied.""",
         agent=agent,
         context=context,
     )
@@ -292,7 +366,7 @@ def create_github_task(
     
     return Task(
         description=f"""
-Push the generated test files to GitHub and create a Pull Request.
+Push the generated API test files to GitHub and create a Pull Request.
 
 ## Files to Commit
 {files_str}
@@ -314,10 +388,10 @@ Push the generated test files to GitHub and create a Pull Request.
 Use format: test/auto-generated-[feature]-[timestamp]
 
 ## Commit Message
-Use format: "Add auto-generated tests for [feature]"
+Use format: "Add auto-generated API tests for [feature]"
 
 ## PR Details
-- Title: "[Auto-Generated] Add tests for [feature]"
+- Title: "[Auto-Generated] Add API tests for [feature]"
 - Body: Include summary of tests, file list, and run instructions
 
 ## Output
@@ -330,4 +404,3 @@ Provide a summary of actions taken and the PR URL (if successful).
 - PR URL: [url] or error message""",
         agent=agent,
     )
-

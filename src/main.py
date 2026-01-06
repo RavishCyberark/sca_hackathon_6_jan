@@ -7,8 +7,13 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# Disable CrewAI telemetry to prevent timeout errors
+os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
+os.environ["OTEL_SDK_DISABLED"] = "true"
 
 from src.config.settings import get_settings, configure_settings
 from src.crew.test_crew import TestGeneratorCrew
@@ -69,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="Generate Playwright test cases from text scenarios using AI",
+        description="Generate API test cases from text scenarios using AI (pytest + requests)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
