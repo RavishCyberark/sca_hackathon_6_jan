@@ -1,0 +1,15 @@
+Test the shopping cart functionality:
+
+1. Navigate to the product listing page
+2. Search for "laptop" in the search box
+3. Click on the first product in the results
+4. Verify the product details page is displayed
+5. Click the "Add to Cart" button
+6. Verify the cart icon shows "1" item
+7. Click on the cart icon
+8. Verify the cart page shows the added product
+9. Verify the product name matches what was added
+10. Verify the quantity is 1
+11. Click "Proceed to Checkout"
+12. Verify the checkout page is displayed
+

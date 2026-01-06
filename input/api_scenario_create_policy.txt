@@ -1,0 +1,16 @@
+Feature: Create Policy API - Description Field Validation
+
+  API Endpoint: POST https://uapautomation-uap.cyberark-everest-pre-prod.cloud/api/policies
+  
+  Authentication:
+    Token URL: https://aog5018.id.integration-cyberark.cloud/oauth2/token/scadev
+    Credentials: serviceuserapr@cyberark.cloud.43204 / Cyber@123
+    Token Body: {"grant_type": "client_credentials", "scope": "full"}
+
+  @positive @description @validation
+  Scenario: Successfully create policy with valid description (string, under 200 chars)
+    Given the user obtains OAuth2 token from the token endpoint
+    And the policy payload has description "Valid test policy description"
+    When the user sends a POST request to "/policies" with valid payload
+    Then the response status code should be 200 or 201
+    And the response should contain the created policy details

@@ -1,0 +1,20 @@
+User Story: Password Reset
+
+As a registered user who forgot my password
+I want to reset my password via email
+So that I can regain access to my account
+
+Acceptance Criteria:
+
+1. User can click "Forgot Password" link on login page
+2. User is taken to password reset page
+3. User can enter their email address
+4. System displays confirmation message after submitting
+5. User receives reset link email (mock in test)
+6. Reset link navigates to new password page
+7. User can enter new password
+8. User can confirm new password
+9. Passwords must match for submission
+10. User sees success message after reset
+11. User can log in with new password
+

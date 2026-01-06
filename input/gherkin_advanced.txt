@@ -1,0 +1,53 @@
+Feature: E-commerce Checkout Process
+  As a customer
+  I want to complete my purchase
+  So that I can receive my ordered items
+
+  Background:
+    Given the user is logged in as "customer@example.com"
+    And the shopping cart has 2 items
+
+  @smoke @checkout
+  Scenario: Complete checkout with credit card
+    Given the user is on the checkout page
+    When the user selects "Credit Card" as payment method
+    And the user enters card number "4111111111111111"
+    And the user enters expiry date "12/25"
+    And the user enters CVV "123"
+    And the user enters billing address:
+      | field   | value           |
+      | street  | 123 Main St     |
+      | city    | New York        |
+      | zip     | 10001           |
+      | country | United States   |
+    And the user clicks "Place Order"
+    Then the order confirmation page should be displayed
+    And the order number should be visible
+    And a confirmation email should be sent
+
+  @checkout @shipping
+  Scenario: Checkout with different shipping address
+    Given the user is on the checkout page
+    When the user unchecks "Same as billing address"
+    And the user enters shipping address:
+      | field   | value           |
+      | street  | 456 Oak Ave     |
+      | city    | Los Angeles     |
+      | zip     | 90001           |
+      | country | United States   |
+    And the user selects "Express Shipping"
+    And the user completes payment
+    Then the order should show the shipping address as "456 Oak Ave, Los Angeles"
+    And the shipping method should show "Express Shipping"
+
+  @negative @validation
+  Scenario: Checkout fails with invalid credit card
+    Given the user is on the checkout page
+    When the user selects "Credit Card" as payment method
+    And the user enters card number "1234567890123456"
+    And the user enters expiry date "01/20"
+    And the user clicks "Place Order"
+    Then an error message should appear
+    And the error should mention "Invalid card number"
+    And the user should remain on the checkout page
+
