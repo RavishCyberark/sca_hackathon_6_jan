@@ -1,12 +1,12 @@
-"""Reusable prompt templates for agents."""
+"""Reusable prompt templates for API test generation agents."""
 
 
 class PromptTemplates:
-    """Collection of prompt templates for agent tasks."""
+    """Collection of prompt templates for API test agent tasks."""
     
     @staticmethod
     def parse_scenario_prompt(scenario_text: str) -> str:
-        """Generate prompt for parsing a test scenario.
+        """Generate prompt for parsing an API test scenario.
         
         Args:
             scenario_text: Raw scenario text
@@ -15,7 +15,7 @@ class PromptTemplates:
             Formatted prompt
         """
         return f"""
-Parse the following test scenario and extract structured information.
+Parse the following API test scenario and extract structured information.
 
 ## Input Scenario
 ```
@@ -25,26 +25,35 @@ Parse the following test scenario and extract structured information.
 ## Instructions
 1. Identify the format (Gherkin, plain English, or user story)
 2. Extract the feature name and scenario name
-3. Break down into individual steps
-4. For each step, identify:
+3. Identify the API endpoint URL and HTTP method
+4. Extract authentication details (token URL, credentials)
+5. Break down into individual steps
+6. For each step, identify:
    - Step type (Given/When/Then/And)
-   - The action being described
-   - Any target element or URL
-   - Any value being entered or verified
+   - The API action being described
+   - Target endpoint or field
+   - Expected status codes or values
 
 ## Output Format
-Provide the parsed scenario as a JSON object with this structure:
+Provide the parsed scenario as a JSON object:
 ```json
 {{
   "feature_name": "string",
   "scenario_name": "string",
+  "api_endpoint": "full URL",
+  "http_method": "POST|GET|PUT|DELETE",
+  "authentication": {{
+    "token_url": "string",
+    "username": "string",
+    "password": "string"
+  }},
   "steps": [
     {{
       "step_type": "given|when|then|and",
       "description": "original step text",
-      "action": "navigate|click|fill|select|verify|etc",
-      "target": "element or URL",
-      "value": "value if applicable"
+      "action": "get_token|send_request|verify_status|verify_response",
+      "target": "endpoint or field",
+      "value": "expected value"
     }}
   ]
 }}
@@ -53,7 +62,7 @@ Provide the parsed scenario as a JSON object with this structure:
 
     @staticmethod
     def analyze_test_prompt(parsed_scenario: str) -> str:
-        """Generate prompt for analyzing a parsed scenario.
+        """Generate prompt for analyzing a parsed API scenario.
         
         Args:
             parsed_scenario: JSON string of parsed scenario
@@ -62,7 +71,7 @@ Provide the parsed scenario as a JSON object with this structure:
             Formatted prompt
         """
         return f"""
-Analyze the following parsed test scenario and create a test blueprint.
+Analyze the following parsed API test scenario and create a test blueprint.
 
 ## Parsed Scenario
 ```json
@@ -70,54 +79,45 @@ Analyze the following parsed test scenario and create a test blueprint.
 ```
 
 ## Instructions
-1. For each step, determine the appropriate Playwright action or assertion
-2. Suggest realistic selectors for UI elements (prefer data-testid)
-3. Map actions to Playwright methods
-4. Map assertions to Playwright expect() calls
+1. Determine the authentication flow (OAuth2, Basic Auth, API Key)
+2. Map test steps to requests library methods
+3. Identify expected status codes for positive/negative tests
+4. Determine response field validations
 
-## Selector Strategy
-- Prefer: `[data-testid="element-name"]`
-- Alternative: `role=button[name="Submit"]`
-- Fallback: `.class-name` or `#element-id`
+## Action Mapping
+- get_token → session.post() to token endpoint
+- send_request → session.post/get/put/delete() to API endpoint
+- verify_status → assert response.status_code == expected
+- verify_response → assert on response.json() fields
 
 ## Output Format
 Provide a test blueprint as JSON:
 ```json
 {{
-  "class_name": "TestClassName",
-  "method_name": "test_method_name",
-  "docstring": "Test description",
-  "actions": [
+  "class_name": "TestAPIClassName",
+  "test_methods": [
     {{
-      "action_type": "navigate|click|fill|etc",
-      "element": {{
-        "name": "element_name",
-        "selector": "[data-testid='...']"
-      }},
-      "value": "value if needed"
+      "method_name": "test_scenario_name",
+      "test_type": "positive|negative",
+      "docstring": "Test description",
+      "payload_modifications": [],
+      "expected_status": 200|201|400,
+      "assertions": []
     }}
   ],
-  "assertions": [
-    {{
-      "assertion_type": "visible|text_contains|url_equals|etc",
-      "element": {{ "selector": "..." }},
-      "expected_value": "..."
-    }}
-  ],
-  "page_elements": [
-    {{
-      "name": "element_name",
-      "selector": "[data-testid='...']",
-      "description": "what this element is"
-    }}
-  ]
+  "authentication": {{
+    "token_url": "...",
+    "username": "...",
+    "password": "..."
+  }},
+  "base_payload": {{}}
 }}
 ```
 """
 
     @staticmethod
     def generate_test_prompt(blueprint: str) -> str:
-        """Generate prompt for creating Playwright test code.
+        """Generate prompt for creating API test code.
         
         Args:
             blueprint: JSON string of test blueprint
@@ -126,7 +126,7 @@ Provide a test blueprint as JSON:
             Formatted prompt
         """
         return f"""
-Generate a complete Playwright Python test file from the following blueprint.
+Generate a complete pytest API test file from the following blueprint.
 
 ## Test Blueprint
 ```json
@@ -134,35 +134,73 @@ Generate a complete Playwright Python test file from the following blueprint.
 ```
 
 ## Requirements
-1. Use pytest with Playwright
-2. Include all necessary imports
-3. Create a test class with the specified name
-4. Implement the test method with proper docstring
-5. Add Given/When/Then comments to organize the code
-6. Use Playwright's expect() for all assertions
-7. Follow PEP 8 style guidelines
+1. Use pytest with requests library
+2. Include imports: pytest, requests, json, urllib3
+3. Suppress SSL warnings with urllib3.disable_warnings()
+4. Create a test class with OAuth2 authentication fixture
+5. Implement test methods with proper docstrings
+6. Add Given/When/Then comments to organize the code
+7. Use assert statements for all assertions
+8. Include debug print statements
 
 ## Template Structure
 ```python
-\"\"\"Test module for [Feature].\"\"\"
+\"\"\"API Test module for [Feature].\"\"\"
 
 import pytest
-from playwright.sync_api import Page, expect
+import requests
+import json
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class TestClassName:
-    \"\"\"Test cases for [Feature].\"\"\"
+    \"\"\"API Test cases for [Feature].\"\"\"
     
-    def test_method_name(self, page: Page):
-        \"\"\"[Docstring from blueprint]\"\"\"
-        # Given - Setup
-        ...
+    TOKEN_URL = "..."
+    API_BASE_URL = "..."
+    
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.session = requests.Session()
+        self.session.verify = False
+        self.access_token = self._get_access_token()
+        self.headers = {{
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {{self.access_token}}"
+        }}
+        yield
+        self.session.close()
+    
+    def _get_access_token(self) -> str:
+        response = self.session.post(
+            self.TOKEN_URL,
+            data={{"grant_type": "client_credentials", "scope": "full"}},
+            auth=("username", "password"),
+            verify=False
+        )
+        return response.json().get("access_token")
+    
+    def get_base_payload(self) -> dict:
+        return {{...}}
+    
+    @pytest.mark.positive
+    def test_method_name(self):
+        \"\"\"Given-When-Then docstring\"\"\"
+        # Given
+        payload = self.get_base_payload()
         
-        # When - Actions
-        ...
+        # When
+        response = self.session.post(
+            f"{{self.API_BASE_URL}}/endpoint",
+            json=payload,
+            headers=self.headers,
+            verify=False
+        )
         
-        # Then - Assertions
-        ...
+        # Then
+        assert response.status_code in [200, 201]
 ```
 
 ## Output
@@ -172,7 +210,7 @@ The code should be ready to run with pytest.
 
     @staticmethod
     def review_code_prompt(code: str) -> str:
-        """Generate prompt for reviewing generated test code.
+        """Generate prompt for reviewing generated API test code.
         
         Args:
             code: Generated Python test code
@@ -181,7 +219,7 @@ The code should be ready to run with pytest.
             Formatted prompt
         """
         return f"""
-Review the following Playwright test code for quality and correctness.
+Review the following API test code for quality and correctness.
 
 ## Code to Review
 ```python
@@ -189,30 +227,25 @@ Review the following Playwright test code for quality and correctness.
 ```
 
 ## Review Checklist
-1. **Imports**: Are all necessary imports present?
-2. **Syntax**: Is the code syntactically correct?
-3. **Best Practices**: Does it follow Playwright best practices?
-4. **Assertions**: Are expect() assertions used correctly?
-5. **Selectors**: Are selectors properly formatted?
-6. **Documentation**: Are docstrings and comments adequate?
-7. **Style**: Does it follow PEP 8?
+1. **Imports**: Are pytest, requests, json, urllib3 present?
+2. **Syntax**: Is the code syntactically correct Python?
+3. **SSL Handling**: Is verify=False used and warnings suppressed?
+4. **Authentication**: Is OAuth2 token flow implemented correctly?
+5. **Assertions**: Are assert statements used properly?
+6. **Headers**: Is Authorization Bearer token included?
+7. **Documentation**: Are docstrings adequate?
+8. **Style**: Does it follow PEP 8?
 
 ## Instructions
-- If the code is good, return it as-is with is_valid=true
+- If the code is good, return it as-is
 - If there are issues, fix them and return the corrected code
 - Add any missing imports
 - Fix any syntax errors
-- Improve selectors if needed
+- Ensure SSL handling is proper
 
-## Output Format
-```json
-{{
-  "is_valid": true|false,
-  "review_notes": ["note1", "note2"],
-  "improvements_made": ["improvement1", "improvement2"],
-  "final_code": "the complete reviewed/fixed code"
-}}
-```
+## Output
+Return ONLY the complete reviewed/fixed Python code.
+No JSON wrapper, no markdown, just the code.
 """
 
     @staticmethod
@@ -234,7 +267,7 @@ Review the following Playwright test code for quality and correctness.
         files_str = "\n".join(f"- {f}" for f in files)
         
         return f"""
-Create a Pull Request for the following auto-generated test files.
+Create a Pull Request for the following auto-generated API test files.
 
 ## Generated Files
 {files_str}
@@ -247,9 +280,9 @@ Create a Pull Request for the following auto-generated test files.
 1. Create a descriptive branch name
 2. Commit the files with a meaningful message
 3. Create a PR with:
-   - Clear title describing what tests were added
+   - Clear title describing what API tests were added
    - Body explaining the generated tests
-   - Instructions on how to run the tests
+   - Instructions on how to run the tests with pytest
 
 ## Output
 Provide the branch name and PR details:
@@ -262,4 +295,3 @@ Provide the branch name and PR details:
 }}
 ```
 """
-

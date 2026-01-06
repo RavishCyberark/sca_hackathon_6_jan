@@ -43,10 +43,6 @@ pip install --upgrade pip setuptools wheel
 echo "📥 Installing dependencies..."
 pip install -r requirements.txt
 
-# Install Playwright browsers
-echo "🌐 Installing Playwright browsers (chromium)..."
-playwright install chromium
-
 # Check Ollama
 echo ""
 echo "🔍 Checking Ollama installation..."

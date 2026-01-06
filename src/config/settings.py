@@ -58,13 +58,12 @@ class GitHubSettings:
 
 
 @dataclass
-class PlaywrightSettings:
-    """Playwright test generation settings."""
+class APITestSettings:
+    """API test generation settings."""
     
-    browser: str = "chromium"
-    headless: bool = True
-    base_url: str = "http://localhost:3000"
-    timeout: int = 30000  # milliseconds
+    # SSL settings
+    verify_ssl: bool = False  # Disable for self-signed certs
+    timeout: int = 30  # seconds
     
     # Test file settings
     test_class_prefix: str = "Test"
@@ -86,7 +85,7 @@ class Settings:
     
     ollama: OllamaSettings = field(default_factory=OllamaSettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)
-    playwright: PlaywrightSettings = field(default_factory=PlaywrightSettings)
+    api_test: APITestSettings = field(default_factory=APITestSettings)
     output: OutputSettings = field(default_factory=OutputSettings)
     
     # Verbose mode
